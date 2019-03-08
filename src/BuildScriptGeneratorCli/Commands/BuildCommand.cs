@@ -22,6 +22,13 @@ namespace Microsoft.Oryx.BuildScriptGeneratorCli
     [Command("build", Description = "Generate and run build scripts.")]
     internal class BuildCommand : BaseCommand
     {
+        // Beginning and ending markers for build script output spans that should be time measured
+        private readonly TextSpan[] measurableStdOutSpans =
+        {
+            new TextSpan("RunPreBuildScript",  BaseBashBuildScriptProperties.PreBuildScriptPrologue,  BaseBashBuildScriptProperties.PreBuildScriptEpilogue),
+            new TextSpan("RunPostBuildScript", BaseBashBuildScriptProperties.PostBuildScriptPrologue, BaseBashBuildScriptProperties.PostBuildScriptEpilogue)
+        };
+
         [Argument(0, Description = "The source directory.")]
         public string SourceDir { get; set; }
 
@@ -138,11 +145,30 @@ namespace Microsoft.Oryx.BuildScriptGeneratorCli
             };
 
             var buildScriptOutput = new StringBuilder();
+            var stdOutSpanEvents = new Dictionary<TextSpan, EventStopwatch>();
+            var stdOutSpanMarkerLookups = BuildStdOutSpanMarkerLookupDicts();
 
             DataReceivedEventHandler stdOutBaseHandler = (sender, args) =>
             {
-                console.WriteLine(args.Data);
-                buildScriptOutput.AppendLine(args.Data);
+                string line = args.Data;
+                console.WriteLine(line);
+                buildScriptOutput.AppendLine(line);
+
+                string marker = line.Trim();
+                if (stdOutSpanMarkerLookups.Beginnings.ContainsKey(marker)) // Start measuring
+                {
+                    var span = stdOutSpanMarkerLookups.Beginnings[marker];
+                    if (!stdOutSpanEvents.ContainsKey(span)) // Avoid a new measurement for a span already being measured
+                    {
+                        stdOutSpanEvents[span] = logger.LogTimedEvent(span.Name);
+                    }
+                }
+                else if (stdOutSpanMarkerLookups.Endings.ContainsKey(marker)) // Stop a running measurement
+                {
+                    var span = stdOutSpanMarkerLookups.Endings[marker];
+                    stdOutSpanEvents.GetValueOrDefault(span)?.Dispose();
+                    stdOutSpanEvents.Remove(span); // No need to check if the removal succeeded, because the event might not exist
+                }
             };
 
             DataReceivedEventHandler stdErrBaseHandler = (sender, args) =>
@@ -297,6 +323,40 @@ namespace Microsoft.Oryx.BuildScriptGeneratorCli
             string[] envVarNames = new string[envVarKeyCollection.Count];
             envVarKeyCollection.CopyTo(envVarNames, 0);
             return envVarNames;
+        }
+
+        private (IDictionary<string, TextSpan> Beginnings, IDictionary<string, TextSpan> Endings) BuildStdOutSpanMarkerLookupDicts()
+        {
+            var beginnings = new Dictionary<string, TextSpan>();
+            var endings = new Dictionary<string, TextSpan>();
+
+            foreach (var span in measurableStdOutSpans)
+            {
+                beginnings[span.BeginMarker] = span;
+                endings[span.EndMarker] = span;
+            }
+
+            return (beginnings, endings);
+        }
+
+        private class TextSpan : IEquatable<TextSpan>
+        {
+            public TextSpan(string name, string beginning, string ending)
+            {
+                Name = name;
+                BeginMarker = beginning;
+                EndMarker = ending;
+            }
+
+            public string Name { get; }
+
+            public string BeginMarker { get; }
+
+            public string EndMarker { get; }
+
+            public override int GetHashCode() => Name.GetHashCode();
+
+            public bool Equals(TextSpan that) => that != null && that.Name == this.Name;
         }
     }
 }

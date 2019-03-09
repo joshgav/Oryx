@@ -151,6 +151,11 @@ namespace Microsoft.Oryx.BuildScriptGeneratorCli
             DataReceivedEventHandler stdOutBaseHandler = (sender, args) =>
             {
                 string line = args.Data;
+                if (line == null)
+                {
+                    return;
+                }
+
                 console.WriteLine(line);
                 buildScriptOutput.AppendLine(line);
 
@@ -173,6 +178,12 @@ namespace Microsoft.Oryx.BuildScriptGeneratorCli
 
             DataReceivedEventHandler stdErrBaseHandler = (sender, args) =>
             {
+                string line = args.Data;
+                if (line == null)
+                {
+                    return;
+                }
+
                 console.Error.WriteLine(args.Data);
                 buildScriptOutput.AppendLine(args.Data);
             };

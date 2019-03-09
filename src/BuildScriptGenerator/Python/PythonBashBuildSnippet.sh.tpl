@@ -27,7 +27,7 @@ source $VIRTUALENVIRONMENTNAME/bin/activate
 if [ -e "requirements.txt" ]
 then
 	pip install --upgrade pip
-	pip install --prefer-binary -r requirements.txt | ts $TS_FMT
+	pip install --prefer-binary -r requirements.txt
 else
 	echo $REQS_NOT_FOUND_MSG
 fi
@@ -41,7 +41,7 @@ if [ -e "requirements.txt" ]
 then
 	echo Running pip install...
 
-	$pip install --prefer-binary -r requirements.txt --target="{{ PackagesDirectory }}" --upgrade | ts $TS_FMT
+	$pip install --prefer-binary -r requirements.txt --target="{{ PackagesDirectory }}" --upgrade
 	pipInstallExitCode=${PIPESTATUS[0]}
 
 	if [[ $pipInstallExitCode != 0 ]]
